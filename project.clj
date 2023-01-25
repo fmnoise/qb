@@ -1,4 +1,4 @@
-(defproject org.clojars.fmnoise/coldbrew (slurp "VERSION")
+(defproject org.clojars.fmnoise/qb (slurp "VERSION")
   :description "Minimalistic Datalog query builder"
   :url "https://github.com/fmnoise/qb"
   :license {:name "Eclipse Public License"
