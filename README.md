@@ -1,4 +1,4 @@
-# qb
+# qb [![Clojars Project](https://img.shields.io/clojars/v/org.clojars.fmnoise/qb.svg)](https://clojars.org/org.clojars.fmnoise/qb)
 
 Minimalistic toolbox for building conditional Datalog queries
 
