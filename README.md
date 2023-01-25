@@ -7,6 +7,8 @@ Minimalistic toolbox for building conditional Datalog queries
 ## Usage
 
 ```clj
+(require '[fmnoise.qb :refer :all])
+
 (defn orders-total-query [{:keys [customer-id order-id]}]
   (-> (find '[?c ?o (sum ?a)])
       (where? '[?o :order/id ?id] order-id)
@@ -15,7 +17,7 @@ Minimalistic toolbox for building conditional Datalog queries
                 [?i :item/amount ?a]])
       (where? '[?c :customer/id ?cid] customer-id)
       (where-not '[?o :order/status :cancelled])))
-      
+
 (orders-total-query nil)
 ;; {:query {:find [?c ?o (sum ?a)]
 ;;          :where [[?o :order/customer ?c]
