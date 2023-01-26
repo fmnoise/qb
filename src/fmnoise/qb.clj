@@ -47,6 +47,19 @@
   [q binding]
   (update-in q [:query :with] (fnil conj []) binding))
 
+(defn or-join [q conditions & [values]]
+  (cond-> q
+    (seq conditions)
+    (update-in [:query :where] (fnil conj []) (cons 'or-join conditions))
+
+    (map? values)
+    (-> (update-in [:query :in] (fnil conj []) (keys values))
+        (update :args (fnil conj []) (vals values)))
+
+    (and values (not (map? values)))
+    (-> (update-in [:query :in] (fnil conj []) (-> conditions flatten last))
+        (update :args (fnil conj []) values))))
+
 (defn where-not
   "Adds `not` condition to query. Accepts optional value.
   If value is set, the corresponding collection binding is addded"
