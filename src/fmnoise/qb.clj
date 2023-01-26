@@ -121,7 +121,10 @@
   [q conditions]
   (reduce (fn [acc condition]
             (if (vector? (first condition))
-              (where acc (first condition) (first (rest condition)))
+              (let [[c v] condition]
+                (if v
+                  (where acc c v)
+                  (where acc c)))
               (where acc condition)))
           q
           conditions))
