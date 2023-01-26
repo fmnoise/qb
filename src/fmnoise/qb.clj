@@ -163,26 +163,6 @@
   [q & conditions]
   (where* q conditions))
 
-(defn- escape-condition [condition]
-  (walk/postwalk
-   (fn [x]
-     (if (and (symbol? x)
-              (or (-> x name (str/starts-with? "?"))
-                  (-> x name (= "_"))))
-       `(quote ~x)
-       x))
-   condition))
-
-(defmacro =>
-  "Quotes symbols starting from ? and `_` symbol in given condition form.
-  (let [attr :payment/id
-      id 100]
-    (=> [?payment attr ?id] id))
-  ;; [[?payment :payment/id ?id] 100]
-  "
-  ([condition] `~(escape-condition condition))
-  ([condition value] `[~(escape-condition condition) ~value]))
-
 (defn ->binding [v & [uniq?]]
   (let [name (if (instance? clojure.lang.Named v)
                (str "?" (when-let [n (namespace v)] (str n "-")) (name v))
@@ -224,3 +204,25 @@
                                     (= '_ v) [binding a]
                                     :else [[binding a (->binding a)] v]))))]
        (where* q conditions)))))
+
+(defn- escape-condition [condition]
+  (walk/postwalk
+   (fn [x]
+     (if (and (symbol? x)
+              (or (-> x name (str/starts-with? "?"))
+                  (-> x name (= "_"))))
+       `(quote ~x)
+       x))
+   condition))
+
+(defmacro =>
+  "Quotes symbols starting from ? and `_` symbol in given condition form.
+  (let [attr :payment/id
+        id 100]
+    (=> [?payment attr ?id] id))
+  ;; [[?payment :payment/id ?id] 100]"
+  [& conditions]
+  (if (-> conditions count (= 1))
+    `~(escape-condition (first conditions))
+    `~(mapv escape-condition conditions)))
+
