@@ -183,15 +183,6 @@
   ([condition] `~(escape-condition condition))
   ([condition value] `[~(escape-condition condition) ~value]))
 
-(defmacro where=>
-  "Adds multiple conditions/values to query using `where`.
-  If condition needs to have supplied value, it should be wrapped in vector or map eg
-  (where-> q
-    ['?e :order/id]
-    [['?e :order/customer '?c] customer]"
-  [q & conditions]
-  `(where* ~q ~(mapv escape-condition conditions)))
-
 (defn ->binding [v & [uniq?]]
   (let [name (if (instance? clojure.lang.Named v)
                (str "?" (when-let [n (namespace v)] (str n "-")) (name v))
