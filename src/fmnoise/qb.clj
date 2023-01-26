@@ -1,6 +1,6 @@
 (ns fmnoise.qb
   {:clj-kondo/config '{:lint-as {fmnoise.qb/=> clj-kondo.lint-as/def-catch-all
-                                 fmnoise.qb/where=> clj-kondo.lint-as/def-catch-all}}}
+                                 fmnoise.qb/where-let clj-kondo.lint-as/def-catch-all}}}
   (:refer-clojure :exclude [find])
   (:require [clojure.walk :as walk]
             [clojure.string :as str]))
@@ -226,3 +226,7 @@
     `~(escape-condition (first conditions))
     `~(mapv escape-condition conditions)))
 
+(defmacro where-let
+  {:style/indent 1}
+  [q bindings & conditions]
+  `(where* ~q (let ~bindings (=> (vector ~@conditions)))))
