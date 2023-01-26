@@ -126,6 +126,23 @@
           q
           conditions))
 
+(defn where-not*
+  "Adds multiple conditions/values from supplied collection to query using `where-not`.
+  If condition needs to have supplied value, it should be wrapped in vector eg
+  (where-not* q
+    [[?e :order/cancelled]
+     ['?e :order/status '?s] status])"
+  [q conditions]
+  (reduce (fn [acc condition]
+            (if (vector? (first condition))
+              (let [[c v] condition]
+                (if v
+                  (where-not acc c v)
+                  (where-not acc c)))
+              (where-not acc condition)))
+          q
+          conditions))
+
 (defn where->
   "Adds multiple conditions/values to query using `where`.
   If condition needs to have supplied value, it should be wrapped in vector eg
