@@ -12,11 +12,19 @@
    (-> q
        (update-in [:query :in] (partial into ['$]))
        (update :args (partial into [src]))))
-  ([q binding source]
-   (let [binding (if (and (set? source) (not (vector? binding))) [binding '...] binding)]
-     (-> q
-         (update-in [:query :in] (fnil conj []) binding)
-         (update :args (fnil conj []) source)))))
+  ([q binding source & inputs]
+   (when (some-> inputs count odd?)
+     (throw (IllegalArgumentException. "in requires an even number of inputs")))
+   (if inputs
+     (->> inputs
+          (into [binding source])
+          (partition 2)
+          (reduce (fn [acc [binding source]]
+                    (if source (in acc binding source) acc)) q))
+     (let [binding (if (and (set? source) (not (vector? binding))) [binding '...] binding)]
+       (-> q
+           (update-in [:query :in] (fnil conj []) binding)
+           (update :args (fnil conj []) source))))))
 
 (defn find
   "Adds bindings to query `:find`"
