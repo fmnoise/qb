@@ -229,7 +229,7 @@
            conditions (->> conditions-map
                            (map (fn [[a v]]
                                   (cond
-                                    (nil? v) (=> [binding a] nil)
-                                    (= '_ v) (=> [binding a])
-                                    :else (=> [binding a (->binding a)] v)))))]
+                                    (nil? v) [[binding a] nil]
+                                    (= '_ v) [binding a]
+                                    :else [[binding a (->binding a)] v]))))]
        (where* q conditions)))))
