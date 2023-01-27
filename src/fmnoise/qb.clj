@@ -5,6 +5,20 @@
   (:require [clojure.walk :as walk]
             [clojure.string :as str]))
 
+(declare where where-not)
+
+(defn add-input
+  "Adds query input. Last optional agrument turns automatic expanding of collection source into collection binding"
+  [q binding source & [expand-coll?]]
+  (let [binding (if (and (not (vector? binding))
+                         (coll? source)
+                         expand-coll?)
+                  [binding '...]
+                  binding)]
+    (-> q
+        (update-in [:query :in] (fnil conj []) binding)
+        (update :args (fnil conj []) source))))
+
 (defn in
   "Adds query input. If binding for input is not specified, its added as `$` as first argument.
   If source is `set?`, the corresponding collection binding is added"
@@ -21,10 +35,7 @@
           (partition 2)
           (reduce (fn [acc [binding source]]
                     (if source (in acc binding source) acc)) q))
-     (let [binding (if (and (set? source) (not (vector? binding))) [binding '...] binding)]
-       (-> q
-           (update-in [:query :in] (fnil conj []) binding)
-           (update :args (fnil conj []) source))))))
+     (add-input q binding source (set? source)))))
 
 (defn find
   "Adds bindings to query `:find`"
@@ -68,17 +79,27 @@
     (-> (update-in [:query :in] (fnil conj []) (-> conditions flatten last))
         (update :args (fnil conj []) values))))
 
+(defn exclude [q binding values & [input-name]]
+  (let [excl-binding (or input-name (symbol (str (name binding) "-excluded")))]
+    (-> q
+        (where-not [(list excl-binding binding)])
+        (add-input excl-binding (if (set? values) values (set values))))))
+
 (defn where-not
   "Adds `not` condition to query. Accepts optional value.
-  If value is set, the corresponding collection binding is addded"
+  If value is set, it's used as function to filter out conditions"
   ([q condition]
    (cond-> q
-     condition (update-in [:query :where] (fnil conj []) (list 'not condition))))
+     condition (where (list 'not condition))))
   ([q condition value]
    (let [binding (-> condition flatten last)]
-     (-> q
-         (in binding value)
-         (where-not condition)))))
+     (if (set? value)
+       (-> q
+           (where condition)
+           (exclude binding value))
+       (-> q
+           (where-not condition)
+           (in binding value))))))
 
 (defn where
   "Adds condition to query. Accepts optional value.
