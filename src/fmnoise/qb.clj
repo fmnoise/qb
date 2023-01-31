@@ -72,12 +72,10 @@
     (update-in [:query :where] (fnil conj []) (cons 'or-join conditions))
 
     (map? values)
-    (-> (update-in [:query :in] (fnil conj []) (keys values))
-        (update :args (fnil conj []) (vals values)))
+    (as-> $ (reduce-kv (fn [acc k v] (in acc k v)) $ values))
 
     (and values (not (map? values)))
-    (-> (update-in [:query :in] (fnil conj []) (-> conditions flatten last))
-        (update :args (fnil conj []) values))))
+    (in (-> conditions flatten last) values)))
 
 (defn exclude [q binding values & [input-name]]
   (let [excl-binding (or input-name (symbol (str (name binding) "-excluded")))]
