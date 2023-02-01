@@ -218,6 +218,9 @@
                src (in src))]
        (reduce-kv (fn [acc k v]
                     (cond
+                      (and (list? v) (= 'not (first v)))
+                      (where-not acc [binding k (->binding k)] (last v))
+
                       (nil? v)
                       (where-not acc [binding k])
 
