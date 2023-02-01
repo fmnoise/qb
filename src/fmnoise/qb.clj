@@ -215,14 +215,19 @@
                      first? find-scalar
                      :else find-coll)
            q (cond-> (find-fn (if key {key binding} find-binding))
-               src (in src))
-           conditions (->> conditions-map
-                           (map (fn [[a v]]
-                                  (cond
-                                    (nil? v) [[binding a] nil]
-                                    (= '_ v) [binding a]
-                                    :else [[binding a (->binding a)] v]))))]
-       (where* q conditions)))))
+               src (in src))]
+       (reduce-kv (fn [acc k v]
+                    (cond
+                      (nil? v)
+                      (where-not acc [binding k])
+
+                      (= '_ v)
+                      (where acc [binding k])
+
+                      :else
+                      (where acc [binding k (->binding k)] v)))
+                  q
+                  conditions-map)))))
 
 (defn- escape-condition [condition]
   (walk/postwalk
