@@ -148,10 +148,10 @@
   [q conditions]
   (reduce (fn [acc condition]
             (if (vector? (first condition))
-              (let [[c v] condition]
-                (if v
-                  (where acc c v)
-                  (where acc c)))
+              (case (count condition)
+                1 (where acc (first condition))
+                2 (where acc (first condition) (last condition))
+                (throw (IllegalArgumentException. (str "Cannot parse query element: " condition))))
               (where acc condition)))
           q
           conditions))
