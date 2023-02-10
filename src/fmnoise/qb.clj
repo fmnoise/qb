@@ -63,8 +63,8 @@
 
 (defn with
   "Adds `with` part to query"
-  [q binding]
-  (update-in q [:query :with] (fnil conj []) binding))
+  [q & bindings]
+  (update-in q [:query :with] (fnil into []) bindings))
 
 (defn or-join [q conditions & [values]]
   (cond-> q
