@@ -47,8 +47,8 @@
          bs (if (not (vector? bs)) [bs] bs)]
      (cond-> q
        override? (update :query #(dissoc % :find :keys))
-       bs (update-in [:query :find] #(-> % flatten vec (into bs)))
-       ks (update-in [:query :keys] #(-> % flatten vec (into ks)))))))
+       bs (update-in [:query :find] #(-> % vec (into bs)))
+       ks (update-in [:query :keys] #(-> % vec (into ks)))))))
 
 (defn find-coll
   "Adds collection binding to query `:find`"
