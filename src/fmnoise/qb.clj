@@ -235,6 +235,54 @@
                   q
                   conditions)))))
 
+(defn vector->query
+  "Transforms vector with attributes and values into query map. By default entity is bound as ?e but this can be redefined with `:find` meta supplied with vector
+  Another supported meta attributes are `:as` for defining query keys and `:first` which will return scalar value.
+
+  (vector->query [:user/id 1 :user/type :admin])
+  ;; => {:query {:find [[?e ...]], :where [[?e :user/id ?user-id] [?e :user/type ?user-type]], :in [?user-id ?user-type]}, :args [1 :admin]}
+
+  (vector->query ^{:find '?user} [:user/id 1])
+  ;; => {:query {:find [[?user ...]], :where [[?user :user/id ?user-id]], :in [?user-id]}, :args [1]}
+
+  (vector->query ^{:find '?user :as :user} [:user/id 1])
+  ;; => {:query {:find [?user], :keys [:user], :where [[?user :user/id ?user-id]], :in [?user-id]}, :args [1]}"
+
+  ([conditions] (vector->query nil conditions))
+  ([src conditions]
+   (when (seq conditions)
+     (when-not (even? (count conditions))
+       (throw (IllegalArgumentException. "Vector should have even number of values")))
+     (let [cmeta (meta conditions)
+           key (:as cmeta)
+           first? (:first cmeta)
+           find-binding (or (:find cmeta) '?e)
+           binding (if (symbol? find-binding)
+                     find-binding
+                     (-> find-binding flatten first))
+           find-fn (cond
+                     key find
+                     first? find-scalar
+                     :else find-coll)
+           q (cond-> (find-fn (if key {key binding} find-binding))
+               src (in src))]
+       (->> conditions
+            (partition 2)
+            (reduce (fn [acc [k v]]
+                      (cond
+                        (and (list? v) (= 'not (first v)))
+                        (where-not acc [binding k (->binding k)] (last v))
+
+                        (nil? v)
+                        (where-not acc [binding k])
+
+                        (= '_ v)
+                        (where acc [binding k])
+
+                        :else
+                        (where acc [binding k (->binding k)] v)))
+                    q))))))
+
 (defn- escape-condition [condition]
   (walk/postwalk
    (fn [x]
