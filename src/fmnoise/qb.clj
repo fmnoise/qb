@@ -283,6 +283,22 @@
                         (where acc [binding k (->binding k)] v)))
                     q))))))
 
+(defn data->query
+  ([conditions] (data->query nil conditions))
+  ([src conditions]
+   (cond
+     (map? conditions)
+     (map->query src conditions)
+
+     (vector? conditions)
+     (vector->query src conditions)
+
+     (list? conditions)
+     (vector->query src (vec conditions))
+
+     :else
+     (throw (IllegalArgumentException. (str "Cannot turn " (type conditions) " into query"))))))
+
 (defn- escape-condition [condition]
   (walk/postwalk
    (fn [x]
