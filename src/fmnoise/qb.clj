@@ -192,8 +192,8 @@
   "Transforms key-value map into query map. By default entity is bound as ?e but this can be redefined with `:find` meta supplied with map.
   Another supported meta attributes are `:as` for defining query keys and `:first` which will return scalar value
 
-  (map->query {:user/id 1})
-  ;; => {:query {:find [[?e ...]], :where [[?e :user/id ?user-id]], :in [?user-id]}, :args [1]}
+  (map->query {:user/id 1 :user/type :admin})
+  ;; => {:query {:find [[?e ...]], :where [[?e :user/id ?user-id] [?e :user/type ?user-type]], :in [?user-id ?user-type]}, :args [1 :admin]}
 
   (map->query ^{:find '?user} {:user/id 1})
   ;; => {:query {:find [[?user ...]], :where [[?user :user/id ?user-id]], :in [?user-id]}, :args [1]}
@@ -201,12 +201,15 @@
   (map->query ^{:find '?user :as :user} {:user/id 1})
   ;; => {:query {:find [?user], :keys [:user], :where [[?user :user/id ?user-id]], :in [?user-id]}, :args [1]}"
 
-  ([conditions-map] (map->query nil conditions-map))
-  ([src conditions-map]
-   (when (seq conditions-map)
-     (let [key (-> conditions-map meta :as)
-           first? (-> conditions-map meta :first)
-           find-binding (or (-> conditions-map meta :find) '?e)
+  ([conditions] (map->query nil conditions))
+  ([src conditions]
+   (when (seq conditions)
+     (when (> 8 (count conditions))
+       (throw (IllegalArgumentException. "Query order is not preserved for conditions map with more than 8 keys")))
+     (let [cmeta (meta conditions)
+           key (:as cmeta)
+           first? (:first cmeta)
+           find-binding (or (:find cmeta) '?e)
            binding (if (symbol? find-binding)
                      find-binding
                      (-> find-binding flatten first))
@@ -230,7 +233,7 @@
                       :else
                       (where acc [binding k (->binding k)] v)))
                   q
-                  conditions-map)))))
+                  conditions)))))
 
 (defn- escape-condition [condition]
   (walk/postwalk
