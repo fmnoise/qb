@@ -204,7 +204,7 @@
   ([conditions] (map->query nil conditions))
   ([src conditions]
    (when (seq conditions)
-     (when (> 8 (count conditions))
+     (when (> (count conditions) 8)
        (throw (IllegalArgumentException. "Query order is not preserved for conditions map with more than 8 keys")))
      (let [cmeta (meta conditions)
            key (:as cmeta)
