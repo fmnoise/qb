@@ -1,9 +1,5 @@
 (ns fmnoise.qb
-  {:clj-kondo/config '{:lint-as {fmnoise.qb/=> clj-kondo.lint-as/def-catch-all
-                                 fmnoise.qb/where-let clj-kondo.lint-as/def-catch-all}}}
-  (:refer-clojure :exclude [find])
-  (:require [clojure.walk :as walk]
-            [clojure.string :as str]))
+  (:refer-clojure :exclude [find]))
 
 (declare where where-not)
 
@@ -298,29 +294,3 @@
 
      :else
      (throw (IllegalArgumentException. (str "Cannot turn " (type conditions) " into query"))))))
-
-(defn- escape-condition [condition]
-  (walk/postwalk
-   (fn [x]
-     (if (and (symbol? x)
-              (or (-> x name (str/starts-with? "?"))
-                  (-> x name (= "_"))))
-       `(quote ~x)
-       x))
-   condition))
-
-(defmacro =>
-  "Quotes symbols starting from ? and `_` symbol in given condition form.
-  (let [attr :payment/id
-        id 100]
-    (=> [?payment attr ?id] id))
-  ;; [[?payment :payment/id ?id] 100]"
-  [& conditions]
-  (if (-> conditions count (= 1))
-    `~(escape-condition (first conditions))
-    `~(mapv escape-condition conditions)))
-
-(defmacro where-let
-  {:style/indent 1}
-  [q bindings & conditions]
-  `(where* ~q (let ~bindings (=> (vector ~@conditions)))))
