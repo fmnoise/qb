@@ -77,27 +77,38 @@
     (and values (not (map? values)))
     (in (-> conditions flatten last) values)))
 
+(defn where-missing
+  "Adds `missing` condition to query. Condition may have or may not have source binding, $ is used then"
+  [q condition]
+  (cond-> q
+    condition (where (concat (list 'missing)
+                             (if (> 3 (count condition))
+                               (into '[$] condition)
+                               condition)))))
+
+(defn where-not
+  "Adds `not` condition to query"
+  [q condition]
+  (cond-> q
+    condition (where (list 'not condition))))
+
 (defn exclude [q binding values & [input-name]]
   (let [excl-binding (or input-name (symbol (str (name binding) "-excluded")))]
     (-> q
         (where-not [(list excl-binding binding)])
         (add-input excl-binding (if (set? values) values (set values))))))
 
-(defn where-not
-  "Adds `not` condition to query. Accepts optional value.
-  If value is set, it's used as function to filter out conditions"
-  ([q condition]
-   (cond-> q
-     condition (where (list 'not condition))))
-  ([q condition value]
-   (let [binding (-> condition flatten last)]
-     (if (set? value)
-       (-> q
-           (where condition)
-           (exclude binding value))
-       (-> q
-           (where-not condition)
-           (in binding value))))))
+(defn where-not=
+  "Adds `!=` condition to query. If passed value is set, it's used as function to filter out conditions"
+  [q condition value]
+  (let [binding (-> condition flatten last)]
+    (if (set? value)
+      (-> q
+          (where condition)
+          (exclude binding value))
+      (-> q
+          (where-not condition)
+          (in binding value)))))
 
 (defn where
   "Adds condition to query. Accepts optional value.
