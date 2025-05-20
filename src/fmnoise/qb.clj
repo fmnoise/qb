@@ -286,17 +286,64 @@
                     q))))))
 
 (defn data->query
+  "Transforms map or vector into query map. By default entity is bound as ?e but this can be redefined with `:find` meta supplied with `conditions`
+  Another supported meta attributes are:
+  `:as` for defining query keys
+  `:first` which will return scalar value
+  `:aggregate` which can contain either a keyword or collection of function symbol and keyword in any order like [:order/total 'sum] or ['sum :order/total]
+
+  (data->query {:user/id 1 :user/type :admin})
+  ;; => {:query {:find [[?e ...]], :where [[?e :user/id ?user-id] [?e :user/type ?user-type]], :in [?user-id ?user-type]}, :args [1 :admin]}
+
+  (datq->query ^{:find '?user} {:user/id 1})
+  ;; => {:query {:find [[?user ...]], :where [[?user :user/id ?user-id]], :in [?user-id]}, :args [1]}
+
+  (data->query ^{:find '?user :as :user} {:user/id 1})
+  ;; => {:query {:find [?user], :keys [:user], :where [[?user :user/id ?user-id]], :in [?user-id]}, :args [1]}
+
+  (data->query ^{:aggregate ['sum :order/total]} {:order/id '_})
+  ;; => {:query {:find [(sum ?order-total) .], :where [[?e :order/id] [?e :order/total ?order-total]]}}
+
+  (data->query ^{:aggregate :order/customer} {:order/id '_})
+  ;; => {:query {:find [[?order-customer ...]], :where [[?e :order/id] [?e :order/customer ?order-customer]]}}
+
+  (data->query [:user/id 1 :user/type :admin])
+  ;; => {:query {:find [[?e ...]], :where [[?e :user/id ?user-id] [?e :user/type ?user-type]], :in [?user-id ?user-type]}, :args [1 :admin]}
+
+  (data->query ^{:find '?user} [:user/id 1])
+  ;; => {:query {:find [[?user ...]], :where [[?user :user/id ?user-id]], :in [?user-id]}, :args [1]}
+
+  (data->query ^{:find '?user :as :user} [:user/id 1])
+  ;; => {:query {:find [?user], :keys [:user], :where [[?user :user/id ?user-id]], :in [?user-id]}, :args [1]}
+
+  (data->query ^{:aggregate ['sum :order/total]} [:order/id '_])
+  ;; => {:query {:find [(sum ?order-total) .], :where [[?e :order/id] [?e :order/total ?order-total]]}}
+
+  (data->query ^{:aggregate :order/customer} [:order/id '_])
+  ;; => {:query {:find [[?order-customer ...]], :where [[?e :order/id] [?e :order/customer ?order-customer]]}}
+"
   ([conditions] (data->query nil conditions))
   ([src conditions]
-   (cond
-     (map? conditions)
-     (map->query src conditions)
+   (let [query (cond
+                 (map? conditions)
+                 (map->query src conditions)
 
-     (vector? conditions)
-     (vector->query src conditions)
+                 (vector? conditions)
+                 (vector->query src conditions)
 
-     (list? conditions)
-     (vector->query src (vec conditions))
+                 (list? conditions)
+                 (vector->query src (vec conditions))
 
-     :else
-     (throw (IllegalArgumentException. (str "Cannot turn " (type conditions) " into query"))))))
+                 :else
+                 (throw (IllegalArgumentException. (str "Cannot turn " (type conditions) " into query"))))
+         aggr (-> conditions meta :aggregate)
+         aggr-func (when (coll? aggr) (->> aggr (filter symbol?) first))
+         aggr-attr (if (coll? aggr)
+                     (->> aggr (filter keyword?) first)
+                     aggr)
+         entity-binding (-> query :query :find flatten first)
+         aggr-binding (->binding aggr-attr)]
+     (cond-> query
+       aggr-attr (where [entity-binding aggr-attr aggr-binding])
+       (and aggr-attr aggr-func) (find-scalar (list aggr-func aggr-binding))
+       (and aggr-attr (not aggr-func)) (find-coll aggr-binding)))))
