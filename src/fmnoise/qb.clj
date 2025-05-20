@@ -226,6 +226,9 @@
                       (= '_ v)
                       (where acc [binding k])
 
+                      (symbol? v)
+                      (where acc [binding k v])
+
                       :else
                       (where acc [binding k (->binding k)] v)))
                   q
@@ -274,6 +277,9 @@
 
                         (= '_ v)
                         (where acc [binding k])
+
+                        (symbol? v)
+                        (where acc [binding k v])
 
                         :else
                         (where acc [binding k (->binding k)] v)))
