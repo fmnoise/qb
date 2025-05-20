@@ -184,7 +184,7 @@
                (str "?" v))]
     (symbol (if uniq? (gensym (str name "_")) name))))
 
-(defn map->query
+(defn- map->query
   "Transforms key-value map into query map. By default entity is bound as ?e but this can be redefined with `:find` meta supplied with map.
   Another supported meta attributes are `:as` for defining query keys and `:first` which will return scalar value
 
@@ -234,7 +234,7 @@
                   q
                   conditions)))))
 
-(defn vector->query
+(defn- vector->query
   "Transforms vector with attributes and values into query map. By default entity is bound as ?e but this can be redefined with `:find` meta supplied with vector
   Another supported meta attributes are `:as` for defining query keys and `:first` which will return scalar value.
 
