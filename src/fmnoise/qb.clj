@@ -62,22 +62,28 @@
   [q & bindings]
   (update-in q [:query :with] (fnil into []) bindings))
 
-(defn or-join [q conditions & [values]]
+(defn- join [q join-type conditions inputs]
   (cond-> q
     (seq conditions)
-    (update-in [:query :where] (fnil conj []) (cons 'or-join conditions))
+    (update-in [:query :where] (fnil conj []) (cons join-type conditions))
 
-    (map? values)
-    (as-> $ (reduce-kv (fn [acc k v] (in acc k v)) $ values))
+    (map? inputs)
+    (as-> $ (reduce-kv (fn [acc k v] (in acc k v)) $ inputs))
 
-    (and values (not (map? values)))
-    (in (-> conditions flatten last) values)))
+    (and inputs (not (map? inputs)))
+    (in (-> conditions flatten last) inputs)))
 
-(defn exclude [q binding values & [input-name]]
+(defn or-join [q conditions & [inputs]]
+  (join q 'or-join conditions inputs))
+
+(defn not-join [q conditions & [inputs]]
+  (join q 'not-join conditions inputs))
+
+(defn exclude [q binding input & [input-name]]
   (let [excl-binding (or input-name (symbol (str (name binding) "-excluded")))]
     (-> q
         (where-not [(list excl-binding binding)])
-        (add-input excl-binding (if (set? values) values (set values))))))
+        (add-input excl-binding (set input)))))
 
 (defn where-not
   "Adds `not` condition to query. Accepts optional value.
@@ -85,15 +91,15 @@
   ([q condition]
    (cond-> q
      condition (where (list 'not condition))))
-  ([q condition value]
+  ([q condition input]
    (let [binding (-> condition flatten last)]
-     (if (set? value)
+     (if (set? input)
        (-> q
            (where condition)
-           (exclude binding value))
+           (exclude binding input))
        (-> q
            (where-not condition)
-           (in binding value))))))
+           (in binding input))))))
 
 (defn where-missing
   "Adds `missing?` condition to query. Condition may have or may not have source binding, $ is used then"
@@ -105,43 +111,42 @@
                                 condition))])))
 
 (defn where
-  "Adds condition to query. Accepts optional value.
-  If value is nil, condition is transformed into (not [...]).
-  If value is `set?`, the corresponding collection binding is addded"
+  "Adds condition to query. Accepts optional input
+  If input is nil, condition is transformed into (not [...]).
+  If input is `set?`, the corresponding collection binding is addded"
   ([q condition]
    (cond-> q
      condition (update-in [:query :where] (fnil conj []) condition)))
-  ([q condition value]
-   (if
-     (nil? value)
+  ([q condition input]
+   (if (nil? input)
      (where-not q condition)
      (let [binding (-> condition flatten last)
-           regexp? (instance? java.util.regex.Pattern value)]
+           regexp? (instance? java.util.regex.Pattern input)]
        (cond-> (where q condition)
-         regexp? (where [(list 're-find value binding)])
-         (not regexp?) (in binding value))))))
+         regexp? (where [(list 're-find input binding)])
+         (not regexp?) (in binding input))))))
 
 (defn where?
-  "Adds condition to query only if supplied value is not nil.
+  "Adds condition to query only if supplied input is not nil.
   Accepts either query condition and value or map/list/vector of conditions and values eg:
   (where? q {'[?e :order/id ?id] id
              '[?e :order/customer ?c] customer}
   (where? q ['[?e :order/id ?id] id
              '[?e :order/customer ?c] customer]
   "
-  ([q condition value]
+  ([q condition input]
    (cond-> q
-     (some? value) (where condition value)))
+     (some? input) (where condition input)))
   ([q cond-vals]
    (if (map? cond-vals)
-     (reduce-kv (fn [acc condition value]
-                  (where? acc condition value))
+     (reduce-kv (fn [acc condition input]
+                  (where? acc condition input))
                 q
                 cond-vals)
      (->> cond-vals
           (partition 2)
-          (reduce (fn [acc [condition value]]
-                    (where? acc condition value))
+          (reduce (fn [acc [condition input]]
+                    (where? acc condition input))
                   q)))))
 
 (defn where*

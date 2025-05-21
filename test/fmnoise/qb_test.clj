@@ -72,21 +72,19 @@
            {:query {:with ['?x '?y]}}))))
 
 (deftest test-or-join
-  (testing "simple or-join"
-    (let [q nil
-          res (qb/or-join q
-                          '[[?e]
-                            [?e :user/id ?id]
-                            [?e :user/email ?email]]
-                          '{?id 1 ?email "alex@google.com"})]
-      (is (= res '{:query {:where [(or-join [?e] [?e :user/id ?id] [?e :user/email ?email])], :in [?id ?email]}, :args [1 "alex@google.com"]})))))
+  (is (= (qb/or-join nil '[[?e] [?e :user/id ?id] [?e :user/email ?email]] '{?id 1 ?email "alex@google.com"})
+         '{:query {:where [(or-join [?e] [?e :user/id ?id] [?e :user/email ?email])], :in [?id ?email]}, :args [1 "alex@google.com"]})))
+
+(deftest test-not-join
+  (is (= (qb/not-join nil '[[?e] [?e :user/id ?id] [?e :user/email ?email]] '{?id 1 ?email "alex@google.com"})
+         '{:query {:where [(not-join [?e] [?e :user/id ?id] [?e :user/email ?email])], :in [?id ?email]}, :args [1 "alex@google.com"]})))
 
 (deftest test-exclude
-  (testing "exclude with default input-name"
+  (testing "default input-name"
     (is (= (qb/exclude {} '?user-id [1 2])
            '{:query {:where [(not [(?user-id-excluded ?user-id)])], :in [?user-id-excluded]}, :args [#{1 2}]})))
 
-  (testing "exclude with custom input-name"
+  (testing "custom input-name"
     (is (= (qb/exclude {} '?user-id [1 2] '?exluded-ids)
            '{:query {:where [(not [(?exluded-ids ?user-id)])], :in [?exluded-ids]}, :args [#{1 2}]}))))
 
