@@ -131,76 +131,29 @@
 (deftest test-where-missing
   (testing "implicit source"
     (is (= (qb/where-missing {} '[?e :user/id])
-           '{:query {:where [(missing? $ ?e :user/id)]}})))
+           '{:query {:where [[(missing? $ ?e :user/id)]]}})))
   (testing "explicit source"
     (is (= (qb/where-missing {} '[$hist ?e :user/id])
-           '{:query {:where [(missing? $hist ?e :user/id)]}}))))
+           '{:query {:where [[(missing? $hist ?e :user/id)]]}}))))
 
-(deftest test-data->query-vector
+(deftest test-data->query
   (testing ":find"
-    (let [q (qb/data->query ^{:find '?customer} [:customer/id 1])]
-      (is (= q '{:query {:find [[?customer ...]], :where [[?customer :customer/id ?customer-id]], :in [?customer-id]}, :args [1]}))))
+    (is (= (qb/data->query ^{:find '?customer} {:customer/id 1})
+           (qb/data->query ^{:find '?customer} [:customer/id 1])
+           '{:query {:find [[?customer ...]], :where [[?customer :customer/id ?customer-id]], :in [?customer-id]}, :args [1]})))
 
   (testing ":from"
-    (let [q (qb/data->query ^{:from '?customer} [:customer/id 1])]
-      (is (= q '{:query {:find [[?customer ...]], :where [[?customer :customer/id ?customer-id]], :in [?customer-id]}, :args [1]}))))
-
-  (testing "with :find and :from"
-    (let [q (qb/data->query ^{:find '?customer :from '?order} [:order/customer '?customer])]
-      (is (= (:query q)
-             '{:find [[?customer ...]]
-               :where [[?order :order/customer ?customer]]})
-          "query structure matches")))
-
-  (testing "with :as and :find"
-    (let [q (qb/data->query ^{:find '?user :as :user} [:user/id 1])]
-      (is (= (:query q)
-             '{:find [?user]
-               :keys [:user]
-               :where [[?user :user/id ?user-id]]
-               :in [?user-id]})
-          "query includes :keys from :as")
-      (is (= (:args q) [1]))))
-
-  (testing "with nil value"
-    (is (= (qb/data->query [:user/id nil])
-           '{:query {:find [[?e ...]], :where [(missing? $ ?e :user/id)]}})))
-
-  (testing "with nil value and explicit source"
-    (is (= (qb/data->query ^{:in '$hist} [:user/id nil])
-           '{:query {:find [[?e ...]], :where [(missing? $hist ?e :user/id)]}})))
-
-  (testing "aggregate sum"
-    (let [q (qb/data->query ^{:aggregate ['sum :order/total]} [:order/id '_])]
-      (is (= (:query q)
-             '{:find [(sum ?order-total) .]
-               :with [?e]
-               :where [[?e :order/id]
-                       [?e :order/total ?order-total]]}))))
-
-  (testing "aggregate attribute"
-    (let [q (qb/data->query ^{:aggregate :order/customer} [:order/id '_])]
-      (is (= (:query q)
-             '{:find [[?order-customer ...]]
-               :with [?e]
-               :where [[?e :order/id]
-                       [?e :order/customer ?order-customer]]})))))
-
-(deftest test-data->query-map
-  (testing ":find"
-    (let [q (qb/data->query ^{:find '?customer} {:customer/id 1})]
-      (is (= q '{:query {:find [[?customer ...]], :where [[?customer :customer/id ?customer-id]], :in [?customer-id]}, :args [1]}))))
-
-  (testing ":from"
-    (let [q (qb/data->query ^{:from '?customer} {:customer/id 1})]
-      (is (= q '{:query {:find [[?customer ...]], :where [[?customer :customer/id ?customer-id]], :in [?customer-id]}, :args [1]}))))
+    (is (= (qb/data->query ^{:from '?customer} {:customer/id 1})
+           (qb/data->query ^{:from '?customer} [:customer/id 1])
+           '{:query {:find [[?customer ...]], :where [[?customer :customer/id ?customer-id]], :in [?customer-id]}, :args [1]})))
 
   (testing ":find and :from"
-    (let [q (qb/data->query ^{:find '?customer :from '?order} {:order/customer '?customer})]
-      (is (= (:query q)
-             '{:find [[?customer ...]]
-               :where [[?order :order/customer ?customer]]})
-          "query structure matches")))
+    (is (= (qb/data->query ^{:find '?customer :from '?order} {:order/customer '?customer})
+           (qb/data->query ^{:find '?customer :from '?order} [:order/customer '?customer])
+           '{:query
+             {:find [[?customer ...]]
+              :where [[?order :order/customer ?customer]]}})
+        "query structure matches"))
 
   (testing ":as and :find"
     (let [q (qb/data->query ^{:find '?user :as :user} {:user/id 1})]
@@ -214,34 +167,35 @@
 
   (testing "with nil value"
     (is (= (qb/data->query {:user/id nil})
-           '{:query {:find [[?e ...]], :where [(missing? $ ?e :user/id)]}})))
+           (qb/data->query [:user/id nil])
+       '{:query {:find [[?e ...]], :where [(not [?e :user/id])]}})))
 
-  (testing "with nil value and explicit source"
-    (is (= (qb/data->query ^{:in '$hist} {:user/id nil})
-           '{:query {:find [[?e ...]], :where [(missing? $hist ?e :user/id)]}})))
+  (testing "with missing? value"
+    (is (= (qb/data->query {:user/id 'missing?})
+           (qb/data->query [:user/id 'missing?])
+           '{:query {:find [[?e ...]], :where [[(missing? $ ?e :user/id)]]}})))
+
+  (testing "with missing? value and explicit source"
+    (is (= (qb/data->query ^{:in '$hist} {:user/id 'missing?})
+           (qb/data->query ^{:in '$hist} [:user/id 'missing?])
+           '{:query {:find [[?e ...]], :where [[(missing? $hist ?e :user/id)]]}})))
 
   (testing "aggregate sum"
-    (let [q (qb/data->query ^{:aggregate ['sum :order/total]} {:order/id '_})]
-      (is (= (:query q)
-             '{:find [(sum ?order-total) .]
-               :with [?e]
-               :where [[?e :order/id]
-                       [?e :order/total ?order-total]]}))))
+    (is (= (qb/data->query ^{:aggregate ['sum :order/total]} {:order/id '_})
+           (qb/data->query ^{:aggregate ['sum :order/total]} [:order/id '_])
+           '{:query {:find [(sum ?order-total) .], :where [[?e :order/id] [?e :order/total ?order-total]], :with [?e]}})))
 
-  (testing "with aggregate attr"
-    (let [q (qb/data->query ^{:aggregate :order/customer} {:order/id '_})]
-      (is (= (:query q)
-             '{:find [[?order-customer ...]]
-               :with [?e]
-               :where [[?e :order/id]
-                       [?e :order/customer ?order-customer]]})))))
+  (testing "aggregate attr"
+    (is (= (qb/data->query ^{:aggregate :order/customer} {:order/id '_})
+           (qb/data->query ^{:aggregate :order/customer} [:order/id '_])
+           '{:query {:find [[?order-customer ...]], :where [[?e :order/id] [?e :order/customer ?order-customer]], :with [?e]}})))
 
-(deftest test-data->query-invalid
   (testing "Map with more than 8 keys"
     (is (thrown-with-msg?
          IllegalArgumentException
          #"Query order is not preserved for conditions map with more than 8 keys"
          (qb/data->query {:k1 1 :k2 2 :k3 3 :k4 4 :k5 5 :k6 6 :k7 7 :k8 8 :k9 9}))))
+
   (testing "Invalid conditions"
     (is (thrown-with-msg?
          IllegalArgumentException
