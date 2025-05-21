@@ -194,13 +194,13 @@
     (symbol (if uniq? (gensym (str name "_")) name))))
 
 (defn- process-condition [acc k v]
-  (let [{::keys [from src]} (meta acc)]
+  (let [{::keys [from in]} (meta acc)]
     (cond
       (and (list? v) (= 'not (first v)))
       (where-not acc [from k (->binding k)] (last v))
 
       (nil? v)
-      (where-missing acc [src from k])
+      (where-missing acc [in from k])
 
       (= '_ v)
       (where acc [from k])
@@ -229,6 +229,7 @@
 
 (defn- setup-query [options]
   (let [key (:as options)
+        in (or (:in options) '$)
         first? (:first options)
         find-binding (or (:find options) (:from options) '?e)
         from (let [binding (or (:from options) find-binding)]

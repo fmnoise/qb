@@ -162,6 +162,14 @@
           "query includes :keys from :as")
       (is (= (:args q) [1]))))
 
+  (testing "with nil value"
+    (is (= (qb/data->query [:user/id nil])
+           '{:query {:find [[?e ...]], :where [(missing $ ?e :user/id)]}})))
+
+  (testing "with nil value and explicit source"
+    (is (= (qb/data->query ^{:in '$hist} [:user/id nil])
+           '{:query {:find [[?e ...]], :where [(missing $hist ?e :user/id)]}})))
+
   (testing "aggregate sum"
     (let [q (qb/data->query ^{:aggregate ['sum :order/total]} [:order/id '_])]
       (is (= (:query q)
@@ -203,6 +211,14 @@
                :in [?user-id]})
           "query includes :keys from :as")
       (is (= (:args q) [1]))))
+
+  (testing "with nil value"
+    (is (= (qb/data->query {:user/id nil})
+           '{:query {:find [[?e ...]], :where [(missing $ ?e :user/id)]}})))
+
+  (testing "with nil value and explicit source"
+    (is (= (qb/data->query ^{:in '$hist} {:user/id nil})
+           '{:query {:find [[?e ...]], :where [(missing $hist ?e :user/id)]}})))
 
   (testing "aggregate sum"
     (let [q (qb/data->query ^{:aggregate ['sum :order/total]} {:order/id '_})]
