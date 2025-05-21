@@ -121,34 +121,40 @@
 
 (deftest test-where?
   (testing "when non-nil value is supplied"
-    (let [q nil]
-      (is (= (qb/where? q ['?e :user/id] 1)
-             '{:query {:where [[?e :user/id]], :in [:user/id]}, :args [1]}))))
+    (is (= (qb/where? nil ['?e :user/id] 1)
+           '{:query {:where [[?e :user/id]], :in [:user/id]}, :args [1]})))
 
   (testing "when nil is supplied"
-    (let [q {}]
-      (is (= (qb/where? q ['?e :user/id] nil)
-             {})))))
+    (is (= (qb/where? {} ['?e :user/id] nil)
+           {}))))
 
 (deftest test-where-star
-  (testing "multiple conditions"
-    (is (= (qb/where* {} [[:user/id 1] [:user/name "Alex"]])
-           '{:query {:where [[:user/id 1] [:user/name "Alex"]]}}))))
+  (is (= (qb/where* {} '[[?e :user/id 1] [?e :user/name "Alex"]])
+         '{:query {:where [[?e :user/id 1] [?e :user/name "Alex"]]}})))
 
 (deftest test-where-arrow
-  (testing "equivalent to where*"
-    (is (= (qb/where-> {} [:user/id 1] [:user/name "Alex"])
-           '{:query {:where [[:user/id 1] [:user/name "Alex"]]}}))))
+  (is (= (qb/where-> {} '[?e :user/id 1] '[?e :user/name "Alex"])
+         '{:query {:where [[?e :user/id 1] [?e :user/name "Alex"]]}})))
 
 (deftest test-where-not-star
-  (testing "negated conditions"
-    (is (= (qb/where-not* {} [[:user/id 1] [:user/active false]])
-           '{:query {:where [(not [:user/id 1]) (not [:user/active false])]}}))))
+  (is (= (qb/where-not* {} '[[?e :user/id 1] [?e :user/active false]])
+         '{:query {:where [(not [?e :user/id 1]) (not [?e :user/active false])]}})))
 
 (deftest test-where-not
-  (testing "single condition"
-    (is (= (qb/where-not {} [:user/id 1])
-           '{:query {:where [(not [:user/id 1])]}}))))
+  (testing "single value"
+    (is (= (qb/where-not {} '[?e :user/id])
+           '{:query {:where [(not [?e :user/id])]}})))
+  (testing "set value"
+    (is (= (qb/where-not {} '[?e :user/id ?id] #{1 2})
+           '{:query {:where [[?e :user/id ?id] (not [(?id-excluded ?id)])], :in [?id-excluded]}, :args [#{1 2}]}))))
+
+(deftest test-where-missing
+  (testing "implicit source"
+    (is (= (qb/where-missing {} '[?e :user/id])
+           '{:query {:where [(missing $ ?e :user/id)]}})))
+  (testing "explicit source"
+    (is (= (qb/where-missing {} '[$hist ?e :user/id])
+           '{:query {:where [(missing $hist ?e :user/id)]}}))))
 
 (deftest test-data->query-vector
   (testing "Vector with aggregate sum"
