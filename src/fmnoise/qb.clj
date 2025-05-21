@@ -193,113 +193,64 @@
                (str "?" v))]
     (symbol (if uniq? (gensym (str name "_")) name))))
 
+(defn- process-condition [acc k v]
+  (let [{::keys [from src]} (meta acc)]
+    (cond
+      (and (list? v) (= 'not (first v)))
+      (where-not acc [from k (->binding k)] (last v))
+
+      (nil? v)
+      (where-missing acc [src from k])
+
+      (= '_ v)
+      (where acc [from k])
+
+      (symbol? v)
+      (where acc [from k v])
+
+      :else
+      (where acc [from k (->binding k)] v))))
+
 (defn- map->query
-  "Transforms key-value map into query map. By default entity is bound as ?e but this can be redefined with `:find` meta supplied with map.
-  Another supported meta attributes are `:as` for defining query keys and `:first` which will return scalar value
-
-  (map->query {:user/id 1 :user/type :admin})
-  ;; => {:query {:find [[?e ...]], :where [[?e :user/id ?user-id] [?e :user/type ?user-type]], :in [?user-id ?user-type]}, :args [1 :admin]}
-
-  (map->query ^{:find '?user} {:user/id 1})
-  ;; => {:query {:find [[?user ...]], :where [[?user :user/id ?user-id]], :in [?user-id]}, :args [1]}
-
-  (map->query ^{:find '?user :as :user} {:user/id 1})
-  ;; => {:query {:find [?user], :keys [:user], :where [[?user :user/id ?user-id]], :in [?user-id]}, :args [1]}"
-
-  ([conditions] (map->query nil conditions))
-  ([src conditions]
-   (when (seq conditions)
-     (when (> (count conditions) 8)
-       (throw (IllegalArgumentException. "Query order is not preserved for conditions map with more than 8 keys")))
-     (let [cmeta (meta conditions)
-           key (:as cmeta)
-           first? (:first cmeta)
-           find-binding (or (:find cmeta) '?e)
-           binding (if (symbol? find-binding)
-                     find-binding
-                     (-> find-binding flatten first))
-           find-fn (cond
-                     key find
-                     first? find-scalar
-                     :else find-coll)
-           q (cond-> (find-fn (if key {key binding} find-binding))
-               src (in src))]
-       (reduce-kv (fn [acc k v]
-                    (cond
-                      (and (list? v) (= 'not (first v)))
-                      (where-not acc [binding k (->binding k)] (last v))
-
-                      (nil? v)
-                      (where-not acc [binding k])
-
-                      (= '_ v)
-                      (where acc [binding k])
-
-                      (symbol? v)
-                      (where acc [binding k v])
-
-                      :else
-                      (where acc [binding k (->binding k)] v)))
-                  q
-                  conditions)))))
+  [query conditions]
+  (when (seq conditions)
+    (when (> (count conditions) 8)
+      (throw (IllegalArgumentException. "Query order is not preserved for conditions map with more than 8 keys")))
+    (reduce-kv process-condition query conditions)))
 
 (defn- vector->query
-  "Transforms vector with attributes and values into query map. By default entity is bound as ?e but this can be redefined with `:find` meta supplied with vector
-  Another supported meta attributes are `:as` for defining query keys and `:first` which will return scalar value.
+  [query conditions]
+  (when (seq conditions)
+    (when-not (even? (count conditions))
+      (throw (IllegalArgumentException. "Vector should have even number of values")))
+    (->> conditions
+         (partition 2)
+         (reduce (fn [acc [k v]] (process-condition acc k v)) query))))
 
-  (vector->query [:user/id 1 :user/type :admin])
-  ;; => {:query {:find [[?e ...]], :where [[?e :user/id ?user-id] [?e :user/type ?user-type]], :in [?user-id ?user-type]}, :args [1 :admin]}
-
-  (vector->query ^{:find '?user} [:user/id 1])
-  ;; => {:query {:find [[?user ...]], :where [[?user :user/id ?user-id]], :in [?user-id]}, :args [1]}
-
-  (vector->query ^{:find '?user :as :user} [:user/id 1])
-  ;; => {:query {:find [?user], :keys [:user], :where [[?user :user/id ?user-id]], :in [?user-id]}, :args [1]}"
-
-  ([conditions] (vector->query nil conditions))
-  ([src conditions]
-   (when (seq conditions)
-     (when-not (even? (count conditions))
-       (throw (IllegalArgumentException. "Vector should have even number of values")))
-     (let [cmeta (meta conditions)
-           key (:as cmeta)
-           first? (:first cmeta)
-           find-binding (or (:find cmeta) '?e)
-           binding (if (symbol? find-binding)
-                     find-binding
-                     (-> find-binding flatten first))
-           find-fn (cond
-                     key find
-                     first? find-scalar
-                     :else find-coll)
-           q (cond-> (find-fn (if key {key binding} find-binding))
-               src (in src))]
-       (->> conditions
-            (partition 2)
-            (reduce (fn [acc [k v]]
-                      (cond
-                        (and (list? v) (= 'not (first v)))
-                        (where-not acc [binding k (->binding k)] (last v))
-
-                        (nil? v)
-                        (where-not acc [binding k])
-
-                        (= '_ v)
-                        (where acc [binding k])
-
-                        (symbol? v)
-                        (where acc [binding k v])
-
-                        :else
-                        (where acc [binding k (->binding k)] v)))
-                    q))))))
+(defn- setup-query [options]
+  (let [key (:as options)
+        first? (:first options)
+        find-binding (or (:find options) (:from options) '?e)
+        from (let [binding (or (:from options) find-binding)]
+               (if (coll? binding)
+                 (->> binding flatten first)
+                 binding))
+        finder (cond
+                 key find
+                 first? find-scalar
+                 :else find-coll)]
+    (with-meta (finder (if key {key find-binding} find-binding))
+      {::find find-binding ::from from ::in in})))
 
 (defn data->query
-  "Transforms map or vector into query map. By default entity is bound as ?e but this can be redefined with `:find` meta supplied with `conditions`
-  Another supported meta attributes are:
+  "Transforms map or vector into query map. Additional query options can be supplied with meta attached to `conditions`:
+  `:in` for source binding (defaults to $)
+  `:find` for defining result binding (defaults to ?e)
+  `:from` for defining entity binding (defaults to ?e)
   `:as` for defining query keys
   `:first` which will return scalar value
   `:aggregate` which can contain either a keyword or collection of function symbol and keyword in any order like [:order/total 'sum] or ['sum :order/total]
+  when aggregation is used, `:with` instruction is automatically added
 
   (data->query {:user/id 1 :user/type :admin})
   ;; => {:query {:find [[?e ...]], :where [[?e :user/id ?user-id] [?e :user/type ?user-type]], :in [?user-id ?user-type]}, :args [1 :admin]}
@@ -333,15 +284,17 @@
 "
   ([conditions] (data->query nil conditions))
   ([src conditions]
-   (let [query (cond
+   (let [query (cond-> (setup-query (meta conditions))
+                 src (in src))
+         query (cond
                  (map? conditions)
-                 (map->query src conditions)
+                 (map->query query conditions)
 
                  (vector? conditions)
-                 (vector->query src conditions)
+                 (vector->query query conditions)
 
                  (list? conditions)
-                 (vector->query src (vec conditions))
+                 (vector->query query (vec conditions))
 
                  :else
                  (throw (IllegalArgumentException. (str "Cannot turn " (type conditions) " into query"))))
@@ -350,9 +303,10 @@
          aggr-attr (if (coll? aggr)
                      (->> aggr (filter keyword?) first)
                      aggr)
-         entity-binding (-> query :query :find flatten first)
+         entity-binding (-> query meta ::from)
          aggr-binding (->binding aggr-attr)]
      (cond-> query
-       aggr-attr (where [entity-binding aggr-attr aggr-binding])
+       aggr-attr (-> (where [entity-binding aggr-attr aggr-binding])
+                     (with entity-binding))
        (and aggr-attr aggr-func) (find-scalar (list aggr-func aggr-binding))
        (and aggr-attr (not aggr-func)) (find-coll aggr-binding)))))

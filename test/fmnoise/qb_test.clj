@@ -50,26 +50,6 @@
     (is (= (:query (qb/find-scalar {} '(count ?x)))
            {:find ['(count ?x) '.]}))))
 
-(deftest test-data->query-map
-  (testing "Simple map with :find"
-    (let [q (qb/data->query ^{:find '?user} {:user/id 1})]
-      (is (= (:query q)
-             '{:find [[?user ...]]
-               :where [[?user :user/id ?user-id]]
-               :in [?user-id]})
-          "query structure matches")
-      (is (= (:args q) [1]))))
-
-  (testing "Map with :as and :find"
-    (let [q (qb/data->query ^{:find '?user :as :user} {:user/id 1})]
-      (is (= (:query q)
-             '{:find [?user]
-               :keys [:user]
-               :where [[?user :user/id ?user-id]]
-               :in [?user-id]})
-          "query includes :keys from :as")
-      (is (= (:args q) [1])))))
-
 (deftest test-binding
   (testing "keyword binding"
     (is (= (qb/->binding :user/id) '?user-id)))
@@ -157,30 +137,95 @@
            '{:query {:where [(missing $hist ?e :user/id)]}}))))
 
 (deftest test-data->query-vector
-  (testing "Vector with aggregate sum"
+  (testing ":find"
+    (let [q (qb/data->query ^{:find '?customer} [:customer/id 1])]
+      (is (= q '{:query {:find [[?customer ...]], :where [[?customer :customer/id ?customer-id]], :in [?customer-id]}, :args [1]}))))
+
+  (testing ":from"
+    (let [q (qb/data->query ^{:from '?customer} [:customer/id 1])]
+      (is (= q '{:query {:find [[?customer ...]], :where [[?customer :customer/id ?customer-id]], :in [?customer-id]}, :args [1]}))))
+
+  (testing "with :find and :from"
+    (let [q (qb/data->query ^{:find '?customer :from '?order} [:order/customer '?customer])]
+      (is (= (:query q)
+             '{:find [[?customer ...]]
+               :where [[?order :order/customer ?customer]]})
+          "query structure matches")))
+
+  (testing "with :as and :find"
+    (let [q (qb/data->query ^{:find '?user :as :user} [:user/id 1])]
+      (is (= (:query q)
+             '{:find [?user]
+               :keys [:user]
+               :where [[?user :user/id ?user-id]]
+               :in [?user-id]})
+          "query includes :keys from :as")
+      (is (= (:args q) [1]))))
+
+  (testing "aggregate sum"
     (let [q (qb/data->query ^{:aggregate ['sum :order/total]} [:order/id '_])]
       (is (= (:query q)
              '{:find [(sum ?order-total) .]
+               :with [?e]
                :where [[?e :order/id]
                        [?e :order/total ?order-total]]}))))
 
-  (testing "Vector with aggregate (non-func)"
+  (testing "aggregate attribute"
     (let [q (qb/data->query ^{:aggregate :order/customer} [:order/id '_])]
       (is (= (:query q)
              '{:find [[?order-customer ...]]
+               :with [?e]
                :where [[?e :order/id]
                        [?e :order/customer ?order-customer]]})))))
 
-(deftest test-data->query-default
-  (testing "Fallback to vector->query"
-    (let [q (qb/data->query [:user/id 42])]
-      (is (= (:query q)
-             '{:find [[?e ...]]
-               :where [[?e :user/id ?user-id]]
-               :in [?user-id]})
-          "uses default ?e binding")
-      (is (= (:args q) [42]))))
+(deftest test-data->query-map
+  (testing ":find"
+    (let [q (qb/data->query ^{:find '?customer} {:customer/id 1})]
+      (is (= q '{:query {:find [[?customer ...]], :where [[?customer :customer/id ?customer-id]], :in [?customer-id]}, :args [1]}))))
 
+  (testing ":from"
+    (let [q (qb/data->query ^{:from '?customer} {:customer/id 1})]
+      (is (= q '{:query {:find [[?customer ...]], :where [[?customer :customer/id ?customer-id]], :in [?customer-id]}, :args [1]}))))
+
+  (testing ":find and :from"
+    (let [q (qb/data->query ^{:find '?customer :from '?order} {:order/customer '?customer})]
+      (is (= (:query q)
+             '{:find [[?customer ...]]
+               :where [[?order :order/customer ?customer]]})
+          "query structure matches")))
+
+  (testing ":as and :find"
+    (let [q (qb/data->query ^{:find '?user :as :user} {:user/id 1})]
+      (is (= (:query q)
+             '{:find [?user]
+               :keys [:user]
+               :where [[?user :user/id ?user-id]]
+               :in [?user-id]})
+          "query includes :keys from :as")
+      (is (= (:args q) [1]))))
+
+  (testing "aggregate sum"
+    (let [q (qb/data->query ^{:aggregate ['sum :order/total]} {:order/id '_})]
+      (is (= (:query q)
+             '{:find [(sum ?order-total) .]
+               :with [?e]
+               :where [[?e :order/id]
+                       [?e :order/total ?order-total]]}))))
+
+  (testing "with aggregate attr"
+    (let [q (qb/data->query ^{:aggregate :order/customer} {:order/id '_})]
+      (is (= (:query q)
+             '{:find [[?order-customer ...]]
+               :with [?e]
+               :where [[?e :order/id]
+                       [?e :order/customer ?order-customer]]})))))
+
+(deftest test-data->query-invalid
+  (testing "Map with more than 8 keys"
+    (is (thrown-with-msg?
+         IllegalArgumentException
+         #"Query order is not preserved for conditions map with more than 8 keys"
+         (qb/data->query {:k1 1 :k2 2 :k3 3 :k4 4 :k5 5 :k6 6 :k7 7 :k8 8 :k9 9}))))
   (testing "Invalid conditions"
     (is (thrown-with-msg?
          IllegalArgumentException
