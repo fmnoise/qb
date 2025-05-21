@@ -200,10 +200,13 @@
       (where-not acc [from k (->binding k)] (last v))
 
       (nil? v)
-      (where-missing acc [in from k])
+      (where-not acc [from k])
 
       (= '_ v)
       (where acc [from k])
+
+      (= 'missing? v)
+      (where-missing acc [in from k])
 
       (symbol? v)
       (where acc [from k v])
