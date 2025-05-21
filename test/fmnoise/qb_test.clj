@@ -131,10 +131,10 @@
 (deftest test-where-missing
   (testing "implicit source"
     (is (= (qb/where-missing {} '[?e :user/id])
-           '{:query {:where [(missing $ ?e :user/id)]}})))
+           '{:query {:where [(missing? $ ?e :user/id)]}})))
   (testing "explicit source"
     (is (= (qb/where-missing {} '[$hist ?e :user/id])
-           '{:query {:where [(missing $hist ?e :user/id)]}}))))
+           '{:query {:where [(missing? $hist ?e :user/id)]}}))))
 
 (deftest test-data->query-vector
   (testing ":find"
@@ -164,11 +164,11 @@
 
   (testing "with nil value"
     (is (= (qb/data->query [:user/id nil])
-           '{:query {:find [[?e ...]], :where [(missing $ ?e :user/id)]}})))
+           '{:query {:find [[?e ...]], :where [(missing? $ ?e :user/id)]}})))
 
   (testing "with nil value and explicit source"
     (is (= (qb/data->query ^{:in '$hist} [:user/id nil])
-           '{:query {:find [[?e ...]], :where [(missing $hist ?e :user/id)]}})))
+           '{:query {:find [[?e ...]], :where [(missing? $hist ?e :user/id)]}})))
 
   (testing "aggregate sum"
     (let [q (qb/data->query ^{:aggregate ['sum :order/total]} [:order/id '_])]
@@ -214,11 +214,11 @@
 
   (testing "with nil value"
     (is (= (qb/data->query {:user/id nil})
-           '{:query {:find [[?e ...]], :where [(missing $ ?e :user/id)]}})))
+           '{:query {:find [[?e ...]], :where [(missing? $ ?e :user/id)]}})))
 
   (testing "with nil value and explicit source"
     (is (= (qb/data->query ^{:in '$hist} {:user/id nil})
-           '{:query {:find [[?e ...]], :where [(missing $hist ?e :user/id)]}})))
+           '{:query {:find [[?e ...]], :where [(missing? $hist ?e :user/id)]}})))
 
   (testing "aggregate sum"
     (let [q (qb/data->query ^{:aggregate ['sum :order/total]} {:order/id '_})]

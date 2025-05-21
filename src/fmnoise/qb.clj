@@ -96,10 +96,10 @@
            (in binding value))))))
 
 (defn where-missing
-  "Adds `missing` condition to query. Condition may have or may not have source binding, $ is used then"
+  "Adds `missing?` condition to query. Condition may have or may not have source binding, $ is used then"
   [q condition]
   (cond-> q
-    condition (where (concat (list 'missing)
+    condition (where (concat (list 'missing?)
                              (if (> 3 (count condition))
                                (into '[$] condition)
                                condition)))))
