@@ -199,19 +199,21 @@
     (symbol (if uniq? (gensym (str name "_")) name))))
 
 (defn- process-condition [acc k v]
-  (let [{::keys [from in]} (meta acc)]
+  (let [{::keys [from in] :as options} (meta acc)
+        nil-mode (::nil options)]
     (cond
       (and (list? v) (= 'not (first v)))
       (where-not acc [from k (->binding k)] (last v))
 
       (nil? v)
-      (where-not acc [from k])
+      (case nil-mode
+        :not (where-not acc [from k])
+        :skip acc
+        :missing (where-missing acc [in from k])
+        (throw (IllegalArgumentException. (str nil-mode " is not valid nil handling option, only :not, :skip and :missing are allowed"))))
 
       (= '_ v)
       (where acc [from k])
-
-      (= 'missing? v)
-      (where-missing acc [in from k])
 
       (symbol? v)
       (where acc [from k v])
@@ -249,7 +251,7 @@
                  first? find-scalar
                  :else find-coll)]
     (with-meta (finder (if key {key find-binding} find-binding))
-      {::find find-binding ::from from ::in in})))
+      {::find find-binding ::from from ::in in ::nil (or (:nil options) :missing)})))
 
 (defn data->query
   "Transforms map or vector into query map. Additional query options can be supplied with meta attached to `conditions`:
@@ -258,6 +260,10 @@
   `:from` for defining entity binding (defaults to ?e)
   `:as` for defining query keys
   `:first` which will return scalar value
+  `:nil` which indicates how to handle nils, defaults to `:missing`, possible options are:
+     `:missing` - replace nil values with [(missing? ...)]
+     `:not` - replace nil values with [(not [...])]
+     `:skip` - skip nil values
   `:aggregate` which can contain either a keyword or collection of function symbol and keyword in any order like [:order/total 'sum] or ['sum :order/total]
   when aggregation is used, `:with` instruction is automatically added
 

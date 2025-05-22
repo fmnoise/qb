@@ -164,19 +164,28 @@
       (is (= (:args q) [1]))))
 
   (testing "with nil value"
-    (is (= (qb/data->query {:user/id nil})
-           (qb/data->query [:user/id nil])
-       '{:query {:find [[?e ...]], :where [(not [?e :user/id])]}})))
-
-  (testing "with missing? value"
-    (is (= (qb/data->query {:user/id 'missing?})
-           (qb/data->query [:user/id 'missing?])
-           '{:query {:find [[?e ...]], :where [[(missing? $ ?e :user/id)]]}})))
-
-  (testing "with missing? value and explicit source"
-    (is (= (qb/data->query ^{:in '$hist} {:user/id 'missing?})
-           (qb/data->query ^{:in '$hist} [:user/id 'missing?])
-           '{:query {:find [[?e ...]], :where [[(missing? $hist ?e :user/id)]]}})))
+    (testing "default"
+      (is (= (qb/data->query {:user/name "Alex" :user/id nil})
+             (qb/data->query [:user/name "Alex" :user/id nil])
+             '{:query {:find [[?e ...]], :where [[?e :user/name ?user-name] [(missing? $ ?e :user/id)]], :in [?user-name]}, :args ["Alex"]})))
+    (testing ":nil = :not"
+      (is (= (qb/data->query ^{:nil :not} {:user/name "Alex" :user/id nil})
+             (qb/data->query ^{:nil :not} [:user/name "Alex" :user/id nil])
+             '{:query {:find [[?e ...]], :where [[?e :user/name ?user-name] (not [?e :user/id])], :in [?user-name]}, :args ["Alex"]})))
+    (testing ":nil = :skip"
+      (is (= (qb/data->query ^{:nil :skip} {:user/name "Alex" :user/id nil})
+             (qb/data->query ^{:nil :skip} [:user/name "Alex" :user/id nil])
+             '{:query {:find [[?e ...]], :where [[?e :user/name ?user-name]], :in [?user-name]}, :args ["Alex"]})))
+    (testing ":nil = :missing"
+      (is (= (qb/data->query ^{:nil :missing} {:user/name "Alex" :user/id nil})
+             (qb/data->query ^{:nil :missing} [:user/name "Alex" :user/id nil])
+             '{:query {:find [[?e ...]], :where [[?e :user/name ?user-name] [(missing? $ ?e :user/id)]], :in [?user-name]}, :args ["Alex"]})))
+    (testing ":nil = :missing (default) and explicit source"
+      (is (= (qb/data->query ^{:in '$hist} {:user/id nil})
+             (qb/data->query ^{:in '$hist} [:user/id nil])
+             (qb/data->query ^{:in '$hist :nil :missing} {:user/id nil})
+             (qb/data->query ^{:in '$hist :nil :missing} [:user/id nil])
+             '{:query {:find [[?e ...]], :where [[(missing? $hist ?e :user/id)]]}}))))
 
   (testing "aggregate sum"
     (is (= (qb/data->query ^{:aggregate ['sum :order/total]} {:order/id '_})
