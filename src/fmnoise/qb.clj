@@ -205,6 +205,9 @@
       (symbol? k)
       (where acc v)
 
+      (and (coll? v) (= '! (first v)))
+      (where-not acc [from k (->binding k)] (last v))
+
       (and (coll? v) (symbol? (first v)))
       (let [[func value] v
             binding (->binding k)

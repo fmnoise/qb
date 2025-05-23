@@ -151,6 +151,13 @@
              (qb/query '[:customer/id ?id])
              '{:query {:find [[?e ...]], :where [[?e :customer/id ?id]]}})))
 
+    (testing "negation !"
+      (is (= (qb/query {:user/admin? ['! true]})
+             (qb/query [:user/admin? ['! true]])
+             (qb/query {:user/admin? '(! true)})
+             (qb/query [:user/admin? '(! true)])
+             '{:query {:find [[?e ...]], :where [(not [?e :user/admin? ?user-admin?])], :in [?user-admin?]}, :args [true]})))
+
     (testing "function with agrument"
       (is (= (qb/query {:customer/id '(> 1)})
              (qb/query {:customer/id ['> 1]})
