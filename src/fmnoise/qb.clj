@@ -80,10 +80,10 @@
   (join q 'not-join conditions inputs))
 
 (defn exclude [q binding input & [input-name]]
-  (let [excl-binding (or input-name (symbol (str (name binding) "-excluded")))]
+  (let [exclusion (or input-name (symbol (str (name binding) "-input")))]
     (-> q
-        (where-not [(list excl-binding binding)])
-        (add-input excl-binding (set input)))))
+        (where-not [(list exclusion binding)])
+        (add-input exclusion (set input)))))
 
 (defn where-not
   "Adds `not` condition to query. Accepts optional value.
@@ -202,8 +202,16 @@
   (let [{::keys [from in] :as options} (meta acc)
         nil-mode (::nil options)]
     (cond
-      (and (list? v) (= 'not (first v)))
-      (where-not acc [from k (->binding k)] (last v))
+      (symbol? k)
+      (where acc v)
+
+      (and (coll? v) (symbol? (first v)))
+      (let [[func value] v
+            binding (->binding k)
+            input-binding (symbol (str (name binding) "-input"))]
+        (cond-> (where acc [from k binding])
+          value (where [(list func binding input-binding)] value)
+          (not value) (where [(list func binding)])))
 
       (nil? v)
       (case nil-mode
@@ -237,91 +245,61 @@
          (partition 2)
          (reduce (fn [acc [k v]] (process-condition acc k v)) query))))
 
-(defn- setup-query [options]
-  (let [key (:as options)
-        in (or (:in options) '$)
-        first? (:first options)
-        find-binding (or (:find options) (:from options) '?e)
-        from (let [binding (or (:from options) find-binding)]
-               (if (coll? binding)
-                 (->> binding flatten first)
-                 binding))
-        finder (cond
-                 key find
-                 first? find-scalar
-                 :else find-coll)]
-    (with-meta (finder (if key {key find-binding} find-binding))
-      {::find find-binding ::from from ::in in ::nil (or (:nil options) :missing)})))
-
-(defn data->query
-  "Transforms map or vector into query map. Additional query options can be supplied with meta attached to `conditions`:
+(defn query
+  "Transforms map or vector into query map.
+  Query options can be supplied as keys (only for maps):
   `:in` for source binding (defaults to $)
   `:find` for defining result binding (defaults to ?e)
   `:from` for defining entity binding (defaults to ?e)
-  `:as` for defining query keys
-  `:first` which will return scalar value
   `:nil` which indicates how to handle nils, defaults to `:missing`, possible options are:
      `:missing` - replace nil values with [(missing? ...)]
      `:not` - replace nil values with [(not [...])]
      `:skip` - skip nil values
-  `:aggregate` which can contain either a keyword or collection of function symbol and keyword in any order like [:order/total 'sum] or ['sum :order/total]
+  `:aggregate` which can contain either a keyword (for attribute) or symbol (for function) or collection of function symbol and keyword in any order like [:order/total 'sum] or ['sum :order/total]
   when aggregation is used, `:with` instruction is automatically added
+  `:where` map or vector of query conditions
 
-  (data->query {:user/id 1 :user/type :admin})
+  (query {:user/id 1 :user/type :admin})
   ;; => {:query {:find [[?e ...]], :where [[?e :user/id ?user-id] [?e :user/type ?user-type]], :in [?user-id ?user-type]}, :args [1 :admin]}
 
-  (datq->query ^{:find '?user} {:user/id 1})
+  (query {:find '?user :where {:user/id 1}})
   ;; => {:query {:find [[?user ...]], :where [[?user :user/id ?user-id]], :in [?user-id]}, :args [1]}
 
-  (data->query ^{:find '?user :as :user} {:user/id 1})
-  ;; => {:query {:find [?user], :keys [:user], :where [[?user :user/id ?user-id]], :in [?user-id]}, :args [1]}
-
-  (data->query ^{:aggregate ['sum :order/total]} {:order/id '_})
+  (query {:aggregate ['sum :order/total] :where {:order/id '_}})
   ;; => {:query {:find [(sum ?order-total) .], :where [[?e :order/id] [?e :order/total ?order-total]]}}
 
-  (data->query ^{:aggregate :order/customer} {:order/id '_})
+  (query {:aggregate :order/customer :where [:order/id '_]})
   ;; => {:query {:find [[?order-customer ...]], :where [[?e :order/id] [?e :order/customer ?order-customer]]}}
 
-  (data->query [:user/id 1 :user/type :admin])
+  (query [:user/id 1 :user/type :admin])
   ;; => {:query {:find [[?e ...]], :where [[?e :user/id ?user-id] [?e :user/type ?user-type]], :in [?user-id ?user-type]}, :args [1 :admin]}
-
-  (data->query ^{:find '?user} [:user/id 1])
-  ;; => {:query {:find [[?user ...]], :where [[?user :user/id ?user-id]], :in [?user-id]}, :args [1]}
-
-  (data->query ^{:find '?user :as :user} [:user/id 1])
-  ;; => {:query {:find [?user], :keys [:user], :where [[?user :user/id ?user-id]], :in [?user-id]}, :args [1]}
-
-  (data->query ^{:aggregate ['sum :order/total]} [:order/id '_])
-  ;; => {:query {:find [(sum ?order-total) .], :where [[?e :order/id] [?e :order/total ?order-total]]}}
-
-  (data->query ^{:aggregate :order/customer} [:order/id '_])
-  ;; => {:query {:find [[?order-customer ...]], :where [[?e :order/id] [?e :order/customer ?order-customer]]}}
 "
-  ([conditions] (data->query nil conditions))
-  ([src conditions]
-   (let [query (cond-> (setup-query (meta conditions))
-                 src (in src))
-         query (cond
-                 (map? conditions)
+  ([data] (query nil data))
+  ([src data]
+   {:pre [(or (map? data) (vector? data))]}
+   (let [{:keys [aggregate] :as options} (when (map? data) data)
+         src-binding (or (:in options) '$)
+         find-binding (or (:find options) (:from options) '?e)
+         from (let [binding (or (:from options) find-binding)]
+                (if (coll? binding)
+                  (->> binding flatten first)
+                  binding))
+         aggr-func (cond
+                     (coll? aggregate) (->> aggregate (filter symbol?) first)
+                     (symbol? aggregate) aggregate)
+         aggr-attr (cond
+                     (coll? aggregate) (->> aggregate (filter keyword?) first)
+                     (keyword? aggregate) aggregate)
+         aggr-binding (->binding aggr-attr)
+         query (cond-> (find-coll find-binding)
+                 src (in src)
+                 true (with-meta {::find find-binding ::from from ::in src-binding ::nil (or (:nil options) :missing)}))
+         conditions (:where data data)
+         query (if (map? conditions)
                  (map->query query conditions)
-
-                 (vector? conditions)
-                 (vector->query query conditions)
-
-                 (list? conditions)
-                 (vector->query query (vec conditions))
-
-                 :else
-                 (throw (IllegalArgumentException. (str "Cannot turn " (type conditions) " into query"))))
-         aggr (-> conditions meta :aggregate)
-         aggr-func (when (coll? aggr) (->> aggr (filter symbol?) first))
-         aggr-attr (if (coll? aggr)
-                     (->> aggr (filter keyword?) first)
-                     aggr)
-         entity-binding (-> query meta ::from)
-         aggr-binding (->binding aggr-attr)]
+                 (vector->query query conditions))]
      (cond-> query
-       aggr-attr (-> (where [entity-binding aggr-attr aggr-binding])
-                     (with entity-binding))
+       aggr-attr (-> (where [from aggr-attr aggr-binding]) (with from))
        (and aggr-attr aggr-func) (find-scalar (list aggr-func aggr-binding))
+       (and aggr-func (not aggr-attr)) (find-scalar (list aggr-func from))
        (and aggr-attr (not aggr-func)) (find-coll aggr-binding)))))
